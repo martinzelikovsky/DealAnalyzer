@@ -1,15 +1,21 @@
-enrichment_cols:
-  - title
-  - description
-  - min_price
-  - max_price
-  - avg_price
-  - category_tree
-  - 
+input_config:
+  tab_regex: '^Detail_\d+'
+
+output_config:
+  enrichment_col_prefix: keepa_
+  enrichment_cols:
+    - title
+    - description
+    - min_price
+    - max_price
+    - avg_price
+    - category_tree
+    - sales_rank
 
 execution_params: 
-  platform: windows  # windows or unix
-  input_dir: ~/
+  platform: unix  # windows or unix
+  input_dir: ~/deal_analyzer_input
+  output_dir: ./results
   lookback_days: 30
   domain: CA
 
