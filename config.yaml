@@ -1,0 +1,15 @@
+enrichment_cols:
+  - title
+  - description
+  - min_price
+  - max_price
+  - avg_price
+  - category_tree
+  - 
+
+execution_params: 
+  platform: windows  # windows or unix
+  input_dir: ~/
+  lookback_days: 30
+  domain: CA
+
