@@ -8,22 +8,11 @@ import logging
 import sys
 import yaml
 
+from utils import config_logger
 from deal_analyzer import DealAnalyzer
 
 
 logger = logging.getLogger(__name__)
-
-def config_logger(output_dir):
-    filename = os.path.join(output_dir, 'deal_analyzer.log')
-    format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-    fh = logging.FileHandler(filename)
-    fh.setLevel = logging.DEBUG
-    fh.setFormatter(format)
-    sh = logging.StreamHandler(sys.stdout)
-    sh.setLevel = logging.INFO
-    sh.setFormatter(format)
-    logger.addHandler(fh)
-    logger.addHandler(sh)
 
 def load_config(config_path):
     if not os.path.exists(config_path):
@@ -115,19 +104,17 @@ def get_checkpoint_file(arg_dict):
 def main():
     args = parse_args()
     arg_dict = vars(args)
-    
     input_files = get_input_files(arg_dict)
     output_dir = get_output_dir(arg_dict)
     config_logger(output_dir)
-
     logger.info(f"Arguments parsed: {args}")
-    
     logger.info(f"Found {len(input_files)} input files:")
     for f in input_files:
         logger.info(f"  - {f}")
-
     logger.info(f"Output directory set to: {output_dir}")
-    checkpoint_file = get_checkpoint_file(arg_dict)
+    get_checkpoint_file(arg_dict)
+    deal_analyzer = DealAnalyzer(arg_dict)
+
 
 if __name__ == '__main__':
     main()
