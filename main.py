@@ -5,8 +5,25 @@ import re
 import keepa
 import os
 import logging
+import sys
 import yaml
+
 from deal_analyzer import DealAnalyzer
+
+
+logger = logging.getLogger(__name__)
+
+def config_logger(output_dir):
+    filename = os.path.join(output_dir, 'deal_analyzer.log')
+    format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    fh = logging.FileHandler(filename)
+    fh.setLevel = logging.DEBUG
+    fh.setFormatter(format)
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setLevel = logging.INFO
+    sh.setFormatter(format)
+    logger.addHandler(fh)
+    logger.addHandler(sh)
 
 def load_config(config_path):
     if not os.path.exists(config_path):
@@ -55,8 +72,7 @@ def get_input_files(arg_dict):
     expanded_dir = os.path.expanduser(input_dir)
     
     if not os.path.exists(expanded_dir):
-        print(f"Warning: Input directory '{expanded_dir}' does not exist.")
-        return []
+        raise FileNotFoundError(f'{expanded_dir} does not exist.')
     
     files = []
     for f in os.listdir(expanded_dir):
@@ -65,33 +81,53 @@ def get_input_files(arg_dict):
     
     # Sort files alphabetically by name
     files.sort()
+    arg_dict['input_file_list'] = files
+
     return files
 
 def get_output_dir(arg_dict):
     # Get or create output directory
-    input_files = get_input_files(arg_dict)
-    output_name = f'{"_".join([x.split("/")[-1].split(".")[0] for x in input_files])}'
-    output_dir = os.path.join(os.path.abspath(__file__).replace(__file__, ''),
-                              arg_dict['output_dir'], output_name)
+    input_files = arg_dict['input_file_list']
+    base_filenames = [os.path.splitext(os.path.basename(f))[0] for f in input_files]
+    output_name = "_".join(base_filenames)
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_name)
+
     if not os.path.exists(output_dir):
-    # This run has not been triggered before
         os.makedirs(output_dir)
-    
+    arg_dict['output_dir'] = output_dir
+
     return output_dir
 
+def get_checkpoint_file(arg_dict):
+    result_files = list(filter(lambda x: 'result' in x, os.listdir(arg_dict['output_dir'])))
+    if not result_files:
+        arg_dict['checkpoint_file'] = None
+        logger.info(f'Fresh run - no checkpoint found.')
+        return
 
-def is_new_result_dir_needed():
-    return True
+    checkpoint_file = os.path.abspath(max(result_files))
+    arg_dict['checkpoint_file'] = checkpoint_file
+    logger.info(f'Continuing an older run - result file {checkpoint_file} found.')
+
+    return checkpoint_file
+
 
 def main():
     args = parse_args()
     arg_dict = vars(args)
-    print(f"Arguments parsed: {args}")
     
     input_files = get_input_files(arg_dict)
-    print(f"Found {len(input_files)} input files:")
+    output_dir = get_output_dir(arg_dict)
+    config_logger(output_dir)
+
+    logger.info(f"Arguments parsed: {args}")
+    
+    logger.info(f"Found {len(input_files)} input files:")
     for f in input_files:
-        print(f"  - {f}")
+        logger.info(f"  - {f}")
+
+    logger.info(f"Output directory set to: {output_dir}")
+    checkpoint_file = get_checkpoint_file(arg_dict)
 
 if __name__ == '__main__':
     main()
