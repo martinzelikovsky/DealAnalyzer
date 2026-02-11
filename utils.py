@@ -4,7 +4,7 @@ import sys
 
 
 
-def config_logger(output_dir, logger):
+def config_logger(output_dir: str, filename: str, logger: logging.Logger):
     filename = os.path.join(output_dir, 'deal_analyzer.log')
     format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     fh = logging.FileHandler(filename)

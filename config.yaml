@@ -1,5 +1,5 @@
 input_config:
-  tab_regex: '^Detail_\d+'
+  tab_regex: 'Detail_\d+'
 
 output_config:
   enrichment_col_prefix: keepa_
@@ -18,4 +18,5 @@ execution_params:
   output_dir: ./results
   lookback_days: 30
   domain: CA
+  log_name: deal_analyzer.log
 

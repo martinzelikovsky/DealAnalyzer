@@ -44,6 +44,8 @@ def parse_args():
                         help='Number of days to look back for historical data')
     parser.add_argument('--domain', type=str, default=exec_params.get('domain', 'CA'),
                         help='Marketplace domain (e.g., CA, US)')
+    parser.add_argument('--log_name', type=str, default=exec_params.get('log_name', 'deal_analyzer.log'),
+                        help='Filename of generated log.')
     
     # Input config overrides
     input_config = config.get('input_config', {})
