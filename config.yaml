@@ -3,7 +3,7 @@ input_config:
 
 output_config:
   enrichment_col_prefix: keepa_
-  enrichment_cols:
+  enrichment_cols:  # TODO: convert this to a map and add types
     - title
     - description
     - min_price
