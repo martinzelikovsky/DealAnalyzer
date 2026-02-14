@@ -9,6 +9,7 @@ import sys
 import yaml
 
 from utils import config_logger
+from keepa_client import KeepaAPI
 from deal_analyzer import DealAnalyzer
 
 
@@ -115,6 +116,8 @@ def main():
         logger.info(f"  - {f}")
     logger.info(f"Output directory set to: {output_dir}")
     get_checkpoint_file(arg_dict)
+    keepa_client = KeepaAPI(output_dir, arg_dict['log_name'])
+    arg_dict['keepa_client'] = keepa_client
     deal_analyzer = DealAnalyzer(arg_dict)
 
 

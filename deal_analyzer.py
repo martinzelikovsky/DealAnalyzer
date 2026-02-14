@@ -9,6 +9,7 @@ import logging
 from typing import Tuple
 
 from utils import config_logger
+from keepa_client import KeepaAPI
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ class DealAnalyzer:
         self.input_files: list[str] = arg_dict['input_file_list']
         self.checkpoint_file: str = arg_dict['checkpoint_file']
         self.log_name: str = arg_dict['log_name']
+        self.keepa_client: KeepaAPI = arg_dict['keepa_client']
 
         self.RESULT_TAB_REGEX = f'{self.tab_regex}_result'
         self.CHECKPOINT_CSV_REGEX = f'{self.tab_regex}_result'
@@ -50,9 +52,6 @@ class DealAnalyzer:
             self.current_csv = self.get_current_csv()
             self.current_df = self.get_current_df()
             self.current_asin = self.get_asin_checkpoint()
-        # else:
-        #     # create result file
-        #     self.create_result_file()
 
         # iterate over the current and remaining tabs
         # for each tab sort the asins and continue from the current asin
@@ -77,8 +76,6 @@ class DealAnalyzer:
                 # TODO: Save CSV into an Excel book
                 writer = pd.ExcelWriter(self.output_file, engine='xlsxwriter')  
                 self.current_df.to_excel(writer, sheet_name=self.current_tab, index=False)
-
-
     
     def get_current_df(self) -> pd.DataFrame:
         df = None
