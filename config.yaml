@@ -1,22 +1,55 @@
+# Deal Analyzer Configuration Template
+# Use this file to configure input/output settings and Keepa API behavior.
+
+# --- Input Configuration ---
 input_config:
+  # Regex pattern to identify which tabs in the Excel file to process.
+  # Default: 'Detail_\d+' (Matches Detail_1, Detail_2, etc.)
   tab_regex: 'Detail_\d+'
 
+# --- Output Configuration ---
 output_config:
+  # Prefix added to columns fetched from Keepa to distinguish them from original data.
   enrichment_col_prefix: keepa_
-  enrichment_cols:  # TODO: convert this to a map and add types
-    - title
-    - description
-    - min_price
-    - max_price
-    - avg_price
-    - category_tree
-    - sales_rank
 
-execution_params: 
-  platform: unix  # windows or unix
+  # List of columns to extract from the Keepa API response.
+  # Format: <field_name>: <data_type>
+  # Data types supported: str, float, int
+  enrichment_cols:
+    title: str
+    # description: str
+    min_price: float
+    max_price: float
+    avg_price: float
+    category_tree: str
+    sales_rank: int
+    
+    # Additional available fields (uncomment to enable):
+    # brand: str
+    # manufacturer: str
+    # model: str
+    # partNumber: str
+    # releaseDate: int
+    # itemWeight: int
+
+# --- Execution Parameters ---
+execution_params:
+  # Target platform for path handling. Options: windows, unix
+  platform: unix
+  
+  # Directory where input Excel files are located.
+  # Supports home directory expansion (e.g., ~/path/to/files)
   input_dir: ~/deal_analyzer_input
-  output_dir: ./results
+  
+  # Directory where results and checkpoints will be saved.
+  results_dir: ./results
+  
+  # Number of days to look back for historical statistics (min/max/avg prices).
   lookback_days: 30
+  
+  # Keepa Marketplace Domain.
+  # Options: US, GB, DE, FR, JP, CA, IT, ES, IN, MX, BR, AU
   domain: CA
+  
+  # Name of the log file generated during the run.
   log_name: deal_analyzer.log
-

@@ -39,8 +39,8 @@ def parse_args():
                         help='Platform: windows or unix')
     parser.add_argument('--input_dir', type=str, default=exec_params.get('input_dir', '~/deal_analyzer_input'),
                         help='Directory for input files')
-    parser.add_argument('--output_dir', type=str, default=exec_params.get('output_dir', './results/$date_result'),
-                        help='Directory for output files')
+    parser.add_argument('--result_dir', type=str, default=exec_params.get('result_dir', './results'),
+                        help='Sub-directory for result files')
     parser.add_argument('--lookback_days', type=int, default=exec_params.get('lookback_days', 30),
                         help='Number of days to look back for historical data')
     parser.add_argument('--domain', type=str, default=exec_params.get('domain', 'CA'),
@@ -55,9 +55,6 @@ def parse_args():
 
     return parser.parse_args()
 
-def initialize_run(arg_dict):
-    pass
-
 def get_input_files(arg_dict):
     # Read and order input excel files by filename
     input_dir = arg_dict.get('input_dir', '.')
@@ -68,9 +65,10 @@ def get_input_files(arg_dict):
     
     files = []
     for f in os.listdir(expanded_dir):
-        if f.lower().endswith(('.xlsx', '.xls')):
+        if f.lower().endswith('.xlsx'):
             files.append(os.path.abspath(os.path.join(expanded_dir, f)))
-    
+    if not files:
+        raise ValueError(f'No input files found. Check {input_dir} for .xlsx files.')
     # Sort files alphabetically by name
     files.sort()
     arg_dict['input_file_list'] = files
@@ -82,7 +80,7 @@ def get_output_dir(arg_dict):
     input_files = arg_dict['input_file_list']
     base_filenames = [os.path.splitext(os.path.basename(f))[0] for f in input_files]
     output_name = "_".join(base_filenames)
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_name)
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), arg_dict['results_dir'], output_name)
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -91,13 +89,17 @@ def get_output_dir(arg_dict):
     return output_dir
 
 def get_checkpoint_file(arg_dict):
+    if not os.path.exists(arg_dict['output_dir']):
+        arg_dict['checkpoint_file'] = None
+        return None
+
     result_files = list(filter(lambda x: 'result' in x, os.listdir(arg_dict['output_dir'])))
     if not result_files:
         arg_dict['checkpoint_file'] = None
         logger.info(f'Fresh run - no checkpoint found.')
-        return
+        return None
 
-    checkpoint_file = os.path.abspath(max(result_files))
+    checkpoint_file = os.path.abspath(os.path.join(arg_dict['output_dir'], max(result_files)))
     arg_dict['checkpoint_file'] = checkpoint_file
     logger.info(f'Continuing an older run - result file {checkpoint_file} found.')
 
@@ -107,18 +109,36 @@ def get_checkpoint_file(arg_dict):
 def main():
     args = parse_args()
     arg_dict = vars(args)
+
+    # Load full config for extra params
+    config = load_config(args.config)
+    output_config = config.get('output_config', {})
+    enrichment_cols = output_config.get('enrichment_cols', {})
+    
     input_files = get_input_files(arg_dict)
     output_dir = get_output_dir(arg_dict)
-    config_logger(output_dir)
+    
+    config_logger(output_dir, arg_dict['log_name'], logger)
+    
     logger.info(f"Arguments parsed: {args}")
     logger.info(f"Found {len(input_files)} input files:")
     for f in input_files:
         logger.info(f"  - {f}")
     logger.info(f"Output directory set to: {output_dir}")
+    
     get_checkpoint_file(arg_dict)
-    keepa_client = KeepaAPI(output_dir, arg_dict['log_name'])
+    
+    keepa_client = KeepaAPI(
+        output_dir=output_dir,
+        log_name=arg_dict['log_name'],
+        domain=arg_dict['domain'],
+        cache_max_age_days=arg_dict['lookback_days'],
+        config_enrichment_cols=enrichment_cols
+    )
+    
     arg_dict['keepa_client'] = keepa_client
     deal_analyzer = DealAnalyzer(arg_dict)
+    deal_analyzer.run()
 
 
 if __name__ == '__main__':
