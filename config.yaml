@@ -42,7 +42,7 @@ execution_params:
   input_dir: ~/deal_analyzer_input
   
   # Directory where results and checkpoints will be saved.
-  results_dir: ./results
+  results_dir: results
   
   # Number of days to look back for historical statistics (min/max/avg prices).
   lookback_days: 30

@@ -78,7 +78,7 @@ def get_input_files(arg_dict):
 def get_output_dir(arg_dict):
     # Get or create output directory relative to main.py
     input_files = arg_dict['input_file_list']
-    base_filenames = [os.path.splitext(os.path.basename(f))[0] for f in input_files]
+    base_filenames = [re.sub(r'\s', '_', os.path.splitext(os.path.basename(f))[0]) for f in input_files]
     run_name = "_".join(base_filenames)
     
     # Base output path (either absolute or relative to script)
