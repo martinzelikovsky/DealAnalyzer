@@ -39,8 +39,8 @@ def parse_args():
                         help='Platform: windows or unix')
     parser.add_argument('--input_dir', type=str, default=exec_params.get('input_dir', '~/deal_analyzer_input'),
                         help='Directory for input files')
-    parser.add_argument('--result_dir', type=str, default=exec_params.get('result_dir', './results'),
-                        help='Sub-directory for result files')
+    parser.add_argument('--output_dir', type=str, default=exec_params.get('output_dir', './results'),
+                        help='Base directory for output results')
     parser.add_argument('--lookback_days', type=int, default=exec_params.get('lookback_days', 30),
                         help='Number of days to look back for historical data')
     parser.add_argument('--domain', type=str, default=exec_params.get('domain', 'CA'),
@@ -76,35 +76,24 @@ def get_input_files(arg_dict):
     return files
 
 def get_output_dir(arg_dict):
-    # Get or create output directory
+    # Get or create output directory relative to main.py
     input_files = arg_dict['input_file_list']
     base_filenames = [os.path.splitext(os.path.basename(f))[0] for f in input_files]
-    output_name = "_".join(base_filenames)
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), arg_dict['results_dir'], output_name)
+    run_name = "_".join(base_filenames)
+    
+    # Base output path (either absolute or relative to script)
+    base_output = arg_dict.get('output_dir', './results')
+    if not os.path.isabs(base_output):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        base_output = os.path.join(script_dir, base_output)
+    
+    run_output_dir = os.path.join(base_output, run_name)
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    arg_dict['output_dir'] = output_dir
+    if not os.path.exists(run_output_dir):
+        os.makedirs(run_output_dir)
+    arg_dict['output_dir'] = run_output_dir
 
-    return output_dir
-
-def get_checkpoint_file(arg_dict):
-    if not os.path.exists(arg_dict['output_dir']):
-        arg_dict['checkpoint_file'] = None
-        return None
-
-    result_files = list(filter(lambda x: 'result' in x, os.listdir(arg_dict['output_dir'])))
-    if not result_files:
-        arg_dict['checkpoint_file'] = None
-        logger.info(f'Fresh run - no checkpoint found.')
-        return None
-
-    checkpoint_file = os.path.abspath(os.path.join(arg_dict['output_dir'], max(result_files)))
-    arg_dict['checkpoint_file'] = checkpoint_file
-    logger.info(f'Continuing an older run - result file {checkpoint_file} found.')
-
-    return checkpoint_file
-
+    return run_output_dir
 
 def main():
     args = parse_args()
@@ -115,30 +104,38 @@ def main():
     output_config = config.get('output_config', {})
     enrichment_cols = output_config.get('enrichment_cols', {})
     
-    input_files = get_input_files(arg_dict)
-    output_dir = get_output_dir(arg_dict)
-    
-    config_logger(output_dir, arg_dict['log_name'], logger)
-    
-    logger.info(f"Arguments parsed: {args}")
-    logger.info(f"Found {len(input_files)} input files:")
-    for f in input_files:
-        logger.info(f"  - {f}")
-    logger.info(f"Output directory set to: {output_dir}")
-    
-    get_checkpoint_file(arg_dict)
-    
-    keepa_client = KeepaAPI(
-        output_dir=output_dir,
-        log_name=arg_dict['log_name'],
-        domain=arg_dict['domain'],
-        cache_max_age_days=arg_dict['lookback_days'],
-        config_enrichment_cols=enrichment_cols
-    )
-    
-    arg_dict['keepa_client'] = keepa_client
-    deal_analyzer = DealAnalyzer(arg_dict)
-    deal_analyzer.run()
+    try:
+        input_files = get_input_files(arg_dict)
+        output_dir = get_output_dir(arg_dict)
+        
+        config_logger(output_dir, arg_dict['log_name'], logger)
+        
+        logger.info(f"Arguments parsed: {args}")
+        logger.info(f"Found {len(input_files)} input files:")
+        for f in input_files:
+            logger.info(f"  - {f}")
+        logger.info(f"Output directory set to: {output_dir}")
+        
+        keepa_client = KeepaAPI(
+            output_dir=output_dir,
+            log_name=arg_dict['log_name'],
+            domain=arg_dict['domain'],
+            cache_max_age_days=arg_dict['lookback_days'],
+            config_enrichment_cols=enrichment_cols
+        )
+        
+        arg_dict['keepa_client'] = keepa_client
+        deal_analyzer = DealAnalyzer(arg_dict)
+        deal_analyzer.run()
+        
+    except Exception as e:
+        if logger.handlers:
+            logger.exception("Application error:")
+        else:
+            print(f"Error before logger initialized: {e}")
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == '__main__':
