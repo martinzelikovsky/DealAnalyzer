@@ -4,6 +4,7 @@ import keepa
 import os
 import logging
 import json
+from pathlib import Path
 from utils import config_logger
 
 logger = logging.getLogger(__name__)
@@ -35,39 +36,41 @@ class KeepaAPI:
         self.cache_max_age_days = cache_max_age_days
         self.enable_cache = enable_cache
         self.config_enrichment_cols = config_enrichment_cols or {}
-        self.cache_dir = os.path.join(os.getcwd(), 'cache')
+        self.cache_dir = Path.cwd() / 'cache'
         
-        if self.enable_cache and not os.path.exists(self.cache_dir):
-            os.makedirs(self.cache_dir)
+        if self.enable_cache:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
             
         self.api = keepa.Keepa(self.api_key) if self.api_key else None
 
-    def _get_cache_path(self, asin: str) -> str:
+    def _get_cache_path(self, asin: str) -> Path:
         today = datetime.datetime.now().strftime('%Y-%m-%d')
-        return os.path.join(self.cache_dir, f"{asin}_{today}.json")
+        return self.cache_dir / f"{asin}_{today}.json"
 
     def _read_from_cache(self, asin: str) -> list[dict] | None:
         if not self.enable_cache:
             return None
         
-        if not os.path.exists(self.cache_dir):
+        if not self.cache_dir.exists():
             return None
             
-        files = [f for f in os.listdir(self.cache_dir) if f.startswith(asin) and f.endswith('.json')]
+        files = [f for f in self.cache_dir.iterdir() if f.is_file() and f.name.startswith(asin) and f.name.endswith('.json')]
         if not files:
             return None
             
-        # Get the newest one
-        files.sort()
+        # Get the newest one based on modification time or name
+        # Assuming filenames contain dates, sorting by name is safest for "latest logical file"
+        # but sorting by mtime is safer for "latest modified file".
+        # Let's stick to name sort since the date is in the filename YYYY-MM-DD
+        files.sort(key=lambda x: x.name)
         newest_file = files[-1]
-        cache_path = os.path.join(self.cache_dir, newest_file)
         
-        file_time = datetime.datetime.fromtimestamp(os.path.getmtime(cache_path))
+        file_time = datetime.datetime.fromtimestamp(newest_file.stat().st_mtime)
         if (datetime.datetime.now() - file_time).days > self.cache_max_age_days:
             return None
             
         try:
-            with open(cache_path, 'r') as f:
+            with newest_file.open('r') as f:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Failed to read cache for {asin}: {e}")
@@ -79,7 +82,7 @@ class KeepaAPI:
         
         cache_path = self._get_cache_path(asin)
         try:
-            with open(cache_path, 'w') as f:
+            with cache_path.open('w') as f:
                 json.dump(data, f)
         except Exception as e:
             logger.error(f"Failed to write cache for {asin}: {e}")

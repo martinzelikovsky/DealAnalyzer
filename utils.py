@@ -1,13 +1,12 @@
 import logging
-import os
 import sys
-
+from pathlib import Path
 
 
 def config_logger(output_dir: str, filename: str, logger: logging.Logger):
-    filename = os.path.join(output_dir, 'deal_analyzer.log')
+    log_file = Path(output_dir) / 'deal_analyzer.log'
     format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-    fh = logging.FileHandler(filename)
+    fh = logging.FileHandler(log_file)
     fh.setLevel = logging.DEBUG
     fh.setFormatter(format)
     sh = logging.StreamHandler(sys.stdout)
