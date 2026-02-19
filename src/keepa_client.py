@@ -1,28 +1,15 @@
 import datetime
 import pandas as pd
 import keepa
+from keepa import Domain
 import os
 import logging
 import json
 from pathlib import Path
-from utils import config_logger
+from .utils import config_logger
 
 logger = logging.getLogger(__name__)
 
-DOMAIN_MAP = {
-    'US': 1,
-    'GB': 2,
-    'DE': 3,
-    'FR': 4,
-    'JP': 5,
-    'CA': 6,
-    'IT': 8,
-    'ES': 9,
-    'IN': 10,
-    'MX': 11,
-    'BR': 12,
-    'AU': 13
-}
 
 class KeepaAPI:
     def __init__(self, output_dir: str, log_name: str, domain: str = 'CA', cache_max_age_days: int = 7, enable_cache: bool = True, config_enrichment_cols: dict = None):
@@ -31,8 +18,7 @@ class KeepaAPI:
         if not self.api_key:
             logger.error("KEEPA_KEY environment variable not set.")
         
-        self.domain_str = domain
-        self.domain_id = DOMAIN_MAP.get(domain.upper(), 1)
+        self.domain = Domain[domain.upper()]
         self.cache_max_age_days = cache_max_age_days
         self.enable_cache = enable_cache
         self.config_enrichment_cols = config_enrichment_cols or {}
@@ -98,7 +84,7 @@ class KeepaAPI:
                 try:
                     logger.info(f"Fetching {asin} from Keepa API...")
                     # The keepa SDK query returns a list of products
-                    raw_response = self.api.query(asin, domain=self.domain_id, stats=stats, history=history)
+                    raw_response = self.api.query(asin, domain=self.domain, stats=stats, history=history)
                     data = raw_response
                     self._write_to_cache(asin, data)
                 except Exception as e:

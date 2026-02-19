@@ -6,7 +6,7 @@ def test_get_output_dir(mocker):
     # Mock mkdir to prevent actual directory creation
     mocker.patch('pathlib.Path.mkdir')
     
-    from main import get_output_dir
+    from src.main import get_output_dir
 
     # input_file_list expects strings as per main.py implementation
     arg_dict = {'input_file_list': ['/tmp/YYZ1 22DEC25.xlsx'], 'output_dir': 'results'}
@@ -23,7 +23,7 @@ def test_get_output_dir(mocker):
     assert ret.resolve() == correct_output_dir.resolve()
 
 def test_get_input_files():
-    from main import get_input_files
+    from src.main import get_input_files
 
     # Use actual test file
     test_dir = Path(__file__).parent / 'test_input_dir'

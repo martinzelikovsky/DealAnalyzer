@@ -9,9 +9,9 @@ import sys
 import yaml
 from pathlib import Path
 
-from utils import config_logger
-from keepa_client import KeepaAPI
-from deal_analyzer import DealAnalyzer
+from .utils import config_logger
+from .keepa_client import KeepaAPI
+from .deal_analyzer import DealAnalyzer
 
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ def get_output_dir(arg_dict) -> Path:
     # Base output path (either absolute or relative to script)
     base_output = Path(arg_dict.get('output_dir', 'results'))
     if not base_output.is_absolute():
-        script_dir = Path(__file__).resolve().parent
+        script_dir = Path(__file__).resolve().parent.parent
         base_output = script_dir / base_output
     
     run_output_dir = base_output / run_name
