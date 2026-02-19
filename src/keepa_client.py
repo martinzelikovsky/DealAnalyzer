@@ -115,16 +115,18 @@ class KeepaAPI:
                 elif col == 'sales_rank':
                     val = product.get('salesRank', val)
                 elif col == 'min_price' and 'stats' in product:
+                    # Index 0 is 'Amazon'
                     # Index 1 is 'New'
-                    min_val = product['stats'].get('min', [None, None])[1]
-                    if min_val is not None and min_val > 0:
-                        val = min_val / 100.0
+                    # TODO: mature implementation: refer to https://keepa.com/#!discuss/t/statistics-object/1308
+                    min_val = product['stats'].get('minInInterval', [None, None])[0]
+                    if min_val is not None and min_val[1] > 0:
+                        val = min_val[1] / 100.0
                 elif col == 'max_price' and 'stats' in product:
-                    max_val = product['stats'].get('max', [None, None])[1]
-                    if max_val is not None and max_val > 0:
-                        val = max_val / 100.0
+                    max_val = product['stats'].get('maxInInterval', [None, None])[0]
+                    if max_val is not None and max_val[1] > 0:
+                        val = max_val[1] / 100.0
                 elif col == 'avg_price' and 'stats' in product:
-                    avg_val = product['stats'].get('avg', [None, None])[1]
+                    avg_val = product['stats'].get('avg', [None, None])[0]
                     if avg_val is not None and avg_val > 0:
                         val = avg_val / 100.0
                 
