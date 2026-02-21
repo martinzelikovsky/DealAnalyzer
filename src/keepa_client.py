@@ -4,8 +4,9 @@ import keepa
 from keepa import Domain
 import os
 import logging
-import json
 from pathlib import Path
+import pickle
+
 from .utils import config_logger
 
 logger = logging.getLogger(__name__)
@@ -31,16 +32,16 @@ class KeepaAPI:
 
     def _get_cache_path(self, asin: str) -> Path:
         today = datetime.datetime.now().strftime('%Y-%m-%d')
-        return self.cache_dir / f"{asin}_{today}.json"
+        return self.cache_dir / f"{asin}_{today}.pickle"
 
-    def _read_from_cache(self, asin: str) -> list[dict] | None:
+    def _read_from_cache(self, asin: str) -> dict | None:
         if not self.enable_cache:
             return None
         
         if not self.cache_dir.exists():
             return None
             
-        files = [f for f in self.cache_dir.iterdir() if f.is_file() and f.name.startswith(asin) and f.name.endswith('.json')]
+        files: list[Path] = [f for f in self.cache_dir.iterdir() if f.is_file() and f.name.startswith(asin) and f.name.endswith('.pickle')]
         if not files:
             return None
             
@@ -56,20 +57,21 @@ class KeepaAPI:
             return None
             
         try:
-            with newest_file.open('r') as f:
-                return json.load(f)
+            with newest_file.open('rb') as f:
+                data = pickle.load(f)
+                return data
         except Exception as e:
             logger.error(f"Failed to read cache for {asin}: {e}")
             return None
 
-    def _write_to_cache(self, asin: str, data: list[dict]) -> None:
+    def _write_to_cache(self, asin: str, data: dict) -> None:
         if not self.enable_cache:
             return
         
         cache_path = self._get_cache_path(asin)
         try:
-            with cache_path.open('w') as f:
-                json.dump(data, f)
+            with cache_path.open('wb') as f:
+                pickle.dump(data, f)
         except Exception as e:
             logger.error(f"Failed to write cache for {asin}: {e}")
 
@@ -84,15 +86,16 @@ class KeepaAPI:
                 try:
                     logger.info(f"Fetching {asin} from Keepa API...")
                     # The keepa SDK query returns a list of products
-                    raw_response = self.api.query(asin, domain=self.domain, stats=stats, history=history)
-                    data = raw_response
-                    self._write_to_cache(asin, data)
+                    raw_response = self.api.query(asin, domain=self.domain, stats=stats, history=history, progress_bar=False)
+                    data = raw_response[0] if isinstance(raw_response, list) and raw_response else None
+                    if data:
+                        self._write_to_cache(asin, data)
                 except Exception as e:
                     logger.error(f"Failed to query Keepa for {asin}: {e}")
                     continue
             
             if data:
-                results.extend(data)
+                results.append(data)
         
         return results
 

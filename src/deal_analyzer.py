@@ -7,6 +7,8 @@ import re
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
+from .keepa_client import KeepaAPI
+
 logger = logging.getLogger(__name__)
 
 class Manifest:
@@ -61,16 +63,16 @@ class Manifest:
 
 class DealAnalyzer:
     def __init__(self, arg_dict: dict):
-        self.arg_dict = arg_dict
-        self.output_dir = Path(arg_dict['output_dir'])
-        self.staging_dir = self.output_dir / 'staging'
-        self.tab_regex = arg_dict['tab_regex']
-        self.input_files = [Path(p) for p in arg_dict['input_file_list']]
-        self.keepa_client = arg_dict['keepa_client']
+        self.arg_dict: dict = arg_dict
+        self.output_dir: Path = Path(arg_dict['output_dir'])
+        self.staging_dir: str = self.output_dir / 'staging'
+        self.tab_regex: str = arg_dict['tab_regex']
+        self.input_files: list[Path] = [Path(p) for p in arg_dict['input_file_list']]
+        self.keepa_client: KeepaAPI = arg_dict['keepa_client']
         
         self.staging_dir.mkdir(parents=True, exist_ok=True)
             
-        self.manifest = Manifest(str(self.output_dir))
+        self.manifest: Manifest = Manifest(str(self.output_dir))
         if self.manifest.load():
             logger.info("Resuming from existing manifest.")
         else:
@@ -116,7 +118,8 @@ class DealAnalyzer:
                 last_asin = self.manifest.data.get("current_asin")
                 if last_asin:
                     logger.info(f"Resuming {tab} from ASIN: {last_asin}")
-                    sheet_df = sheet_df[sheet_df['B00 ASIN'] > last_asin]
+                    sheet_df = sheet_df[sheet_df['B00 ASIN'] >= last_asin]
+                    results = list(filter(lambda x: x['B00 ASIN'] < last_asin, results))
                 else:
                     logger.info(f"Resuming {tab} from start (no ASIN in manifest)")
         
