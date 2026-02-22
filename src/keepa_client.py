@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class KeepaAPI:
-    def __init__(self, output_dir: str, log_name: str, domain: str = 'CA', cache_max_age_days: int = 7, enable_cache: bool = True, config_enrichment_cols: dict = None):
+    def __init__(self, output_dir: str, log_name: str, domain: str = 'CA', cache_max_age_days: int = 7, enable_cache: bool = True, config_enrichment_cols: dict = None, enrichment_col_prefix: str = 'keepa_'):
         config_logger(output_dir, log_name, logger)
         self.api_key = os.environ.get('KEEPA_KEY')
         if not self.api_key:
@@ -23,6 +23,7 @@ class KeepaAPI:
         self.cache_max_age_days = cache_max_age_days
         self.enable_cache = enable_cache
         self.config_enrichment_cols = config_enrichment_cols or {}
+        self.enrichment_col_prefix = enrichment_col_prefix
         self.cache_dir = Path.cwd() / 'cache'
         
         if self.enable_cache:
@@ -104,54 +105,84 @@ class KeepaAPI:
             return pd.DataFrame()
             
         processed_data = []
+        prefix = self.enrichment_col_prefix
+
         for product in product_data:
             row = {}
             row['asin'] = product.get('asin')
             
             # Extract fields based on config
+            # config_enrichment_cols is a dict of {col_name: type}
+            # We iterate over the requested columns
             for col, dtype in self.config_enrichment_cols.items():
+                add_date: bool = False
+                price_date: str = ''
+                
+                # Default fetch
                 val = product.get(col)
                 
                 # Special handling for some fields
-                if col == 'category_tree' and isinstance(product.get('categoryTree'), list):
+                if col == 'categoryTree' and isinstance(product.get('categoryTree'), list):
                     val = " > ".join([c.get('name', '') for c in product.get('categoryTree')])
-                elif col == 'sales_rank':
-                    val = product.get('salesRank', val)
-                elif col == 'min_price' and 'stats' in product:
-                    # Index 0 is 'Amazon'
-                    # Index 1 is 'New'
-                    # TODO: mature implementation: refer to https://keepa.com/#!discuss/t/statistics-object/1308
-                    min_val = product['stats'].get('minInInterval', [None, None])[0]
+                elif col == 'salesRank':
+                     # salesRank is a dict in the raw response, usually we want the current rank for the main category
+                     # But sometimes it's an int if already processed. 
+                     # The raw Keepa 'salesRanks' is a dict {categoryId: rank, ...}
+                     # The SDK might expose 'salesRank' as the rank in the main category?
+                     # Let's trust the key exists or fallback to the dict 'salesRanks'
+                     val = product.get('salesRank') or product.get('salesRanks')
+                elif col == 'minPrice' and 'stats' in product:
+                    # Index 0 is 'Amazon', Index 1 is 'New'
+                    min_val = product['stats'].get('min', [None, None])[0]
                     if min_val is not None and min_val[1] > 0:
+                        price_date = self.get_date_from_keepa_min(min_val[0])
                         val = min_val[1] / 100.0
-                elif col == 'max_price' and 'stats' in product:
-                    max_val = product['stats'].get('maxInInterval', [None, None])[0]
+                elif col == 'maxPrice' and 'stats' in product:
+                    max_val = product['stats'].get('max', [None, None])[0]
                     if max_val is not None and max_val[1] > 0:
+                        price_date = self.get_date_from_keepa_min(min_val[0])
                         val = max_val[1] / 100.0
-                elif col == 'avg_price' and 'stats' in product:
+                elif col == 'avgPrice' and 'stats' in product:
                     avg_val = product['stats'].get('avg', [None, None])[0]
                     if avg_val is not None and avg_val > 0:
                         val = avg_val / 100.0
-                
-                row[col] = val
-            
+                elif col == 'minIntervalPrice' and 'stats' in product:
+                    min_val = product['stats'].get('minInInterval', [None, None])[0]
+                    if min_val is not None and min_val[1] > 0:
+                        price_date = self.get_date_from_keepa_min(min_val[0])
+                        val = min_val[1] / 100.0
+                elif col == 'maxIntervalPrice' and 'stats' in product:
+                    max_val = product['stats'].get('maxInInterval', [None, None])[0]
+                    if max_val is not None and max_val[1] > 0:
+                        price_date = self.get_date_from_keepa_min(max_val[0])
+                        val = max_val[1] / 100.0
+
+                # Apply prefix to the output column name
+                row[f"{prefix}{col}"] = val
+                if price_date:
+                    row[f"{prefix}{col}Date"] = price_date
+
             processed_data.append(row)
             
         df = pd.DataFrame(processed_data)
         
         # Apply types
         for col, dtype in self.config_enrichment_cols.items():
-            if col in df.columns:
+            prefixed_col = f"{prefix}{col}"
+            if prefixed_col in df.columns:
                 try:
                     if dtype == 'int':
-                        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+                        df[prefixed_col] = pd.to_numeric(df[prefixed_col], errors='coerce').fillna(0).astype(int)
                     elif dtype == 'float':
-                        df[col] = pd.to_numeric(df[col], errors='coerce').astype(float)
+                        df[prefixed_col] = pd.to_numeric(df[prefixed_col], errors='coerce').astype(float)
                     elif dtype == 'str':
-                        df[col] = df[col].astype(str)
+                        df[prefixed_col] = df[prefixed_col].astype(str)
                 except Exception as e:
-                    logger.warning(f"Failed to cast column {col} to {dtype}: {e}")
-                    
+                    logger.warning(f"Failed to cast column {prefixed_col} to {dtype}: {e}")
+        # All other columns (dates for now)
+        for col in [x for x in df.columns if x not in [f'{prefix}{y}' for y in self.config_enrichment_cols.keys()]]:
+            df[col] = df[col].astype(str)
+
         return df
 
     def get_asin_df(self, asin: str) -> pd.DataFrame:

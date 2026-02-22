@@ -17,20 +17,25 @@ output_config:
   # Data types supported: str, float, int
   enrichment_cols:
     title: str
-    # description: str
-    min_price: float
-    max_price: float
-    avg_price: float
-    category_tree: str
-    sales_rank: int
-    
-    # Additional available fields (uncomment to enable):
-    # brand: str
-    # manufacturer: str
-    # model: str
-    # partNumber: str
-    # releaseDate: int
-    # itemWeight: int
+    brand: str
+    description: str
+    manufacturer: str
+    model: str
+    partNumber: str
+
+    minPrice: float
+    maxPrice: float
+    avgPrice: float
+    minInInterval: float
+    maxInInterval: float
+    avgInInterval: float
+
+    categoryTree: str
+    monthlySold: int
+    salesRank: int
+    availabilityAmazon: str
+    releaseDate: str
+    productType: str
 
 # --- Execution Parameters ---
 execution_params:

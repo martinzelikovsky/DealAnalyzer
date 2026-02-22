@@ -105,6 +105,7 @@ def main():
     config = load_config(args.config)
     output_config = config.get('output_config', {})
     enrichment_cols = output_config.get('enrichment_cols', {})
+    enrichment_prefix = output_config.get('enrichment_col_prefix', 'keepa_')
     
     try:
         input_files = get_input_files(arg_dict)
@@ -123,7 +124,8 @@ def main():
             log_name=arg_dict['log_name'],
             domain=arg_dict['domain'],
             cache_max_age_days=arg_dict['lookback_days'],
-            config_enrichment_cols=enrichment_cols
+            config_enrichment_cols=enrichment_cols,
+            enrichment_col_prefix=enrichment_prefix
         )
         
         arg_dict['keepa_client'] = keepa_client
