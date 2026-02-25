@@ -13,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 class KeepaAPI:
-    def __init__(self, output_dir: str, log_name: str, domain: str = 'CA', cache_max_age_days: int = 7, enable_cache: bool = True, config_enrichment_cols: dict = None, enrichment_col_prefix: str = 'keepa_'):
+    CSV_MAP = {'AMAZON': 0,
+               'NEW': 1}
+
+    def __init__(self, output_dir: str, log_name: str, domain: str = 'CA', cache_max_age_days: int = 7,
+                 enable_cache: bool = True, config_enrichment_cols: dict = None, enrichment_col_prefix: str = 'keepa_'):
         config_logger(output_dir, log_name, logger)
         self.api_key = os.environ.get('KEEPA_KEY')
         if not self.api_key:
@@ -115,12 +119,8 @@ class KeepaAPI:
             # config_enrichment_cols is a dict of {col_name: type}
             # We iterate over the requested columns
             for col, dtype in self.config_enrichment_cols.items():
-                add_date: bool = False
-                price_date: str = ''
-                
                 # Default fetch
                 val = product.get(col)
-                
                 # Special handling for some fields
                 if col == 'categoryTree' and isinstance(product.get('categoryTree'), list):
                     val = " > ".join([c.get('name', '') for c in product.get('categoryTree')])
@@ -131,42 +131,22 @@ class KeepaAPI:
                      # The SDK might expose 'salesRank' as the rank in the main category?
                      # Let's trust the key exists or fallback to the dict 'salesRanks'
                      val = product.get('salesRank') or product.get('salesRanks')
-                elif col == 'minPrice' and 'stats' in product:
-                    # Index 0 is 'Amazon', Index 1 is 'New'
-                    min_val = product['stats'].get('min', [None, None])[0]
-                    if min_val is not None and min_val[1] > 0:
-                        price_date = self.get_date_from_keepa_min(min_val[0])
-                        val = min_val[1] / 100.0
-                elif col == 'maxPrice' and 'stats' in product:
-                    max_val = product['stats'].get('max', [None, None])[0]
-                    if max_val is not None and max_val[1] > 0:
-                        price_date = self.get_date_from_keepa_min(min_val[0])
-                        val = max_val[1] / 100.0
-                elif col == 'avgPrice' and 'stats' in product:
-                    avg_val = product['stats'].get('avg', [None, None])[0]
-                    if avg_val is not None and avg_val > 0:
-                        val = avg_val / 100.0
-                elif col == 'minIntervalPrice' and 'stats' in product:
-                    min_val = product['stats'].get('minInInterval', [None, None])[0]
-                    if min_val is not None and min_val[1] > 0:
-                        price_date = self.get_date_from_keepa_min(min_val[0])
-                        val = min_val[1] / 100.0
-                elif col == 'maxIntervalPrice' and 'stats' in product:
-                    max_val = product['stats'].get('maxInInterval', [None, None])[0]
-                    if max_val is not None and max_val[1] > 0:
-                        price_date = self.get_date_from_keepa_min(max_val[0])
-                        val = max_val[1] / 100.0
-
+                elif col == 'price_cols':
+                    row.update(self.get_price_cols(product))
+                    continue
                 # Apply prefix to the output column name
                 row[f"{prefix}{col}"] = val
-                if price_date:
-                    row[f"{prefix}{col}Date"] = price_date
 
             processed_data.append(row)
             
         df = pd.DataFrame(processed_data)
-        
-        # Apply types
+        df = self.apply_df_types(df)
+        return df
+    
+    def apply_df_types(self, df: pd.DataFrame) -> pd.DataFrame:
+        prefix = self.enrichment_col_prefix
+        price_types = self.config_enrichment_cols['price_cols']['price_types']
+        price_cols = [x[0] for x in self.config_enrichment_cols['price_cols'].items() if x[0] != 'price_types']
         for col, dtype in self.config_enrichment_cols.items():
             prefixed_col = f"{prefix}{col}"
             if prefixed_col in df.columns:
@@ -179,11 +159,36 @@ class KeepaAPI:
                         df[prefixed_col] = df[prefixed_col].astype(str)
                 except Exception as e:
                     logger.warning(f"Failed to cast column {prefixed_col} to {dtype}: {e}")
-        # All other columns (dates for now)
-        for col in [x for x in df.columns if x not in [f'{prefix}{y}' for y in self.config_enrichment_cols.keys()]]:
-            df[col] = df[col].astype(str)
-
+            elif col == 'price_cols':
+                for price_type in price_types:
+                    for price_col in price_cols:
+                        df[f'{prefix}{price_col}{price_type}'] = pd.to_numeric(df[f'{prefix}{price_col}{price_type}'],
+                                                                               errors='coerce').astype(float)
+                        if (price_col in ('min', 'max', 'minInInterval', 'maxInInterval')
+                            and (date_col := f'{prefix}{price_col}{price_type}Date') in df.columns):
+                            df[date_col] = df[date_col].astype(str)
         return df
+
+    def get_price_cols(self, product: dict) -> dict:
+        prefix = self.enrichment_col_prefix
+        price_types = self.config_enrichment_cols['price_cols']['price_types']
+        price_cols = [x[0] for x in self.config_enrichment_cols['price_cols'].items() if x[0] != 'price_types']
+        row = {}
+        val = None
+        for price_type in price_types:
+            for price_col in price_cols:
+                val = product['stats'][price_col][self.CSV_MAP[price_type]]
+                if price_col in ('min', 'max', 'minInInterval', 'maxInInterval') and val[1] > 0:
+                    row[f'{prefix}{price_col}{price_type}'] = val[1] / 100.0
+                    row[f'{prefix}{price_col}{price_type}Date'] = self.get_date_from_keepa_min(val[0])
+                elif isinstance(val, (int, float)) and val > 0:
+                    row[f'{prefix}{price_col}{price_type}'] = val / 100.0
+                else: 
+                    row[f'{prefix}{price_col}{price_type}'] = val
+        logger.debug(f'Got {price_types=} and {price_cols=} for {product['asin']}.')
+
+        return row
+
 
     def get_asin_df(self, asin: str) -> pd.DataFrame:
         data = self.get_product_data([asin])

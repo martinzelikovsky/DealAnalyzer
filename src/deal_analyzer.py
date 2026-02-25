@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 from .keepa_client import KeepaAPI
+from .utils import config_logger
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ class DealAnalyzer:
         self.keepa_client: KeepaAPI = arg_dict['keepa_client']
         
         self.staging_dir.mkdir(parents=True, exist_ok=True)
+        config_logger(arg_dict['output_dir'], arg_dict['log_name'], logger)
             
         self.manifest: Manifest = Manifest(str(self.output_dir))
         if self.manifest.load():

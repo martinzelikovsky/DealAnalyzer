@@ -23,12 +23,11 @@ output_config:
     model: str
     partNumber: str
 
-    minPrice: float
-    maxPrice: float
-    avgPrice: float
+    min: float
+    max: float
+    avg: float
     minInInterval: float
     maxInInterval: float
-    avgInInterval: float
 
     categoryTree: str
     monthlySold: int
