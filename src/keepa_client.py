@@ -178,7 +178,8 @@ class KeepaAPI:
         for price_type in price_types:
             for price_col in price_cols:
                 val = product['stats'][price_col][self.CSV_MAP[price_type]]
-                if price_col in ('min', 'max', 'minInInterval', 'maxInInterval') and val[1] > 0:
+                if (price_col in ('min', 'max', 'minInInterval', 'maxInInterval')
+                     and isinstance(val, list) and val[1] > 0):
                     row[f'{prefix}{price_col}{price_type}'] = val[1] / 100.0
                     row[f'{prefix}{price_col}{price_type}Date'] = self.get_date_from_keepa_min(val[0])
                 elif isinstance(val, (int, float)) and val > 0:

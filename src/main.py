@@ -113,7 +113,7 @@ def main():
         
         config_logger(str(output_dir), arg_dict['log_name'], logger)
         
-        logger.info(f"Arguments parsed: {args}")
+        logger.info(f"Deal Analyzer re-launched with arguments: {args}")
         logger.info(f"Found {len(input_files)} input files:")
         for f in input_files:
             logger.info(f"  - {f}")
