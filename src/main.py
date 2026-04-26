@@ -44,6 +44,8 @@ def parse_args() -> argparse.Namespace:
                         help='Base directory for output results')
     parser.add_argument('--lookback_days', type=int, default=exec_params.get('lookback_days', 30),
                         help='Number of days to look back for historical data')
+    parser.add_argument('--batch_size', type=int, default=exec_params.get('batch_size', 20),
+                        help='Number of ASINs to process in a single Keepa API call')
     parser.add_argument('--domain', type=str, default=exec_params.get('domain', 'CA'),
                         help='Marketplace domain (e.g., CA, US)')
     parser.add_argument('--log_name', type=str, default=exec_params.get('log_name', 'deal_analyzer.log'),

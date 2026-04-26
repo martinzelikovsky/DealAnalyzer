@@ -51,6 +51,9 @@ execution_params:
   # Number of days to look back for historical statistics (min/max/avg prices).
   lookback_days: 30
   
+  # Number of ASINs to process in a single Keepa API call.
+  batch_size: 20
+  
   # Keepa Marketplace Domain.
   # Options: US, GB, DE, FR, JP, CA, IT, ES, IN, MX, BR, AU
   domain: CA

@@ -82,25 +82,32 @@ class KeepaAPI:
 
     def get_product_data(self, asins: list[str], stats: int = 30, history: bool = True) -> list[dict]:
         results = []
+        asins_to_fetch = []
         for asin in asins:
             data = self._read_from_cache(asin)
-            if data is None:
-                if not self.api:
-                    logger.error(f"Keepa API not initialized, cannot fetch {asin}")
-                    continue
-                try:
-                    logger.info(f"Fetching {asin} from Keepa API...")
-                    # The keepa SDK query returns a list of products
-                    raw_response = self.api.query(asin, domain=self.domain, stats=stats, history=history, progress_bar=False)
-                    data = raw_response[0] if isinstance(raw_response, list) and raw_response else None
-                    if data:
-                        self._write_to_cache(asin, data)
-                except Exception as e:
-                    logger.error(f"Failed to query Keepa for {asin}: {e}")
-                    continue
-            
-            if data:
+            if data is not None:
                 results.append(data)
+            else:
+                asins_to_fetch.append(asin)
+        
+        if asins_to_fetch:
+            if not self.api:
+                logger.error(f"Keepa API not initialized, cannot fetch batch of {len(asins_to_fetch)} ASINs")
+            else:
+                try:
+                    logger.info(f"Fetching batch of {len(asins_to_fetch)} ASINs from Keepa API...")
+                    # The keepa SDK query can accept a list of ASINs and returns a list of products
+                    raw_response = self.api.query(asins_to_fetch, domain=self.domain, stats=stats, history=history, progress_bar=False)
+                    
+                    if not isinstance(raw_response, list):
+                        raw_response = [raw_response]
+                        
+                    for data in raw_response:
+                        if data and 'asin' in data:
+                            self._write_to_cache(data['asin'], data)
+                            results.append(data)
+                except Exception as e:
+                    logger.error(f"Failed to query Keepa for batch: {e}")
         
         return results
 
@@ -145,8 +152,13 @@ class KeepaAPI:
     
     def apply_df_types(self, df: pd.DataFrame) -> pd.DataFrame:
         prefix = self.enrichment_col_prefix
-        price_types = self.config_enrichment_cols['price_cols']['price_types']
-        price_cols = [x[0] for x in self.config_enrichment_cols['price_cols'].items() if x[0] != 'price_types']
+        
+        price_types = []
+        price_cols = []
+        if 'price_cols' in self.config_enrichment_cols:
+            price_types = self.config_enrichment_cols['price_cols'].get('price_types', [])
+            price_cols = [x[0] for x in self.config_enrichment_cols['price_cols'].items() if x[0] != 'price_types']
+            
         for col, dtype in self.config_enrichment_cols.items():
             prefixed_col = f"{prefix}{col}"
             if prefixed_col in df.columns:
@@ -193,6 +205,10 @@ class KeepaAPI:
 
     def get_asin_df(self, asin: str) -> pd.DataFrame:
         data = self.get_product_data([asin])
+        return self.get_results_dataframe(data)
+
+    def get_asins_df(self, asins: list[str]) -> pd.DataFrame:
+        data = self.get_product_data(asins)
         return self.get_results_dataframe(data)
 
     @staticmethod

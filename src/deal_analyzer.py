@@ -68,6 +68,7 @@ class DealAnalyzer:
         self.output_dir: Path = Path(arg_dict['output_dir'])
         self.staging_dir: str = self.output_dir / 'staging'
         self.tab_regex: str = arg_dict['tab_regex']
+        self.batch_size: int = arg_dict.get('batch_size', 20)
         self.input_files: list[Path] = [Path(p) for p in arg_dict['input_file_list']]
         self.keepa_client: KeepaAPI = arg_dict['keepa_client']
         
@@ -117,35 +118,41 @@ class DealAnalyzer:
             if staging_csv.exists():
                 existing_df = pd.read_csv(staging_csv)
                 results = existing_df.to_dict('records')
-                last_asin = self.manifest.data.get("current_asin")
-                if last_asin:
-                    logger.info(f"Resuming {tab} from ASIN: {last_asin}")
-                    sheet_df = sheet_df[sheet_df['B00 ASIN'] >= last_asin]
-                    results = list(filter(lambda x: x['B00 ASIN'] < last_asin, results))
+                if results:
+                    drop_count = min(self.batch_size, len(results))
+                    resume_asin = results[-drop_count]['B00 ASIN']
+                    logger.info(f"Resuming {tab} from ASIN: {resume_asin} (rewinding {drop_count} items to repeat batch)")
+                    sheet_df = sheet_df[sheet_df['B00 ASIN'] >= resume_asin]
+                    results = results[:-drop_count]
                 else:
-                    logger.info(f"Resuming {tab} from start (no ASIN in manifest)")
+                    logger.info(f"Resuming {tab} from start (no ASINs in staging)")
         
         if sheet_df.empty and results:
             logger.info(f"Tab {tab} already finished processing all ASINs.")
         else:
-            for i, (idx, row) in enumerate(sheet_df.iterrows()):
-                asin = row['B00 ASIN']
-                logger.info(f"Fetching Keepa data for {asin}")
+            for i in range(0, len(sheet_df), self.batch_size):
+                batch_df = sheet_df.iloc[i:i+self.batch_size]
+                asins = batch_df['B00 ASIN'].tolist()
                 
-                keepa_df = self.keepa_client.get_asin_df(asin)
+                logger.info(f"Fetching Keepa data for batch of {len(asins)} ASINs")
+                keepa_df = self.keepa_client.get_asins_df(asins)
                 
-                # Convert row to dict for merging
-                row_dict = row.to_dict()
-                if not keepa_df.empty:
-                    keepa_data = keepa_df.iloc[0].to_dict()
-                    row_dict.update(keepa_data)
+                for _, row in batch_df.iterrows():
+                    asin = row['B00 ASIN']
+                    row_dict = row.to_dict()
+                    
+                    if not keepa_df.empty and 'asin' in keepa_df.columns:
+                        keepa_match = keepa_df[keepa_df['asin'] == asin]
+                        if not keepa_match.empty:
+                            keepa_data = keepa_match.iloc[0].to_dict()
+                            row_dict.update(keepa_data)
+                            
+                    results.append(row_dict)
                 
-                results.append(row_dict)
-                
-                # Periodic checkpoint
-                if len(results) % 10 == 0:
-                    pd.DataFrame(results).to_csv(staging_csv, index=False)
-                    self.manifest.update_progress(str(file_path), tab, asin)
+                # Checkpoint after each batch
+                pd.DataFrame(results).to_csv(staging_csv, index=False)
+                last_asin = asins[-1]
+                self.manifest.update_progress(str(file_path), tab, last_asin)
 
         # Final save for tab
         if results:
