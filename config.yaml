@@ -6,6 +6,29 @@ input_config:
   # Regex pattern to identify which tabs in the Excel file to process.
   # Default: 'Detail_\d+' (Matches Detail_1, Detail_2, etc.)
   tab_regex: 'Detail_\d+'
+  
+  # The name of the sheet containing tab aggregations (like FOB Cost and Offer Rate).
+  summary_sheet_name: 'Summary'
+
+# --- Evaluation Configuration ---
+evaluation_config:
+  # How to determine the "Current Value" price from Keepa data.
+  value_proxy: 'keepa_minInIntervalNEW' 
+  
+  # A safety margin to discount what we believe the item can be sold for
+  # (e.g. 0.15 means estimating the sale price will be 15% less than the Keepa proxy).
+  margin_rate: 0.15 
+  
+  # The percentage of the purchase price (Unit_Cost) we expect to recover for unenriched items.
+  # 0.0 means assume unsellable ($0). 1.0 means we break even (sell for 100% of what we paid).
+  unenriched_sale_rate: 0.0
+
+# --- Distribution Configuration ---
+distribution_config:
+  # Select which distributions to create and include in the report. Each will be broken down by Tab.
+  by_category: true
+  by_category_subcategory: true
+  by_msrp: true
 
 # --- Output Configuration ---
 output_config:

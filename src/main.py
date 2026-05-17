@@ -55,6 +55,8 @@ def parse_args() -> argparse.Namespace:
     input_config = config.get('input_config', {})
     parser.add_argument('--tab_regex', type=str, default=input_config.get('tab_regex', '^Detail_\\d+'),
                         help='Regex for excel tabs to process')
+    parser.add_argument('--summary_sheet_name', type=str, default=input_config.get('summary_sheet_name', 'Summary'),
+                        help='Name of the summary sheet')
 
     return parser.parse_args()
 
@@ -131,6 +133,8 @@ def main():
         )
         
         arg_dict['keepa_client'] = keepa_client
+        arg_dict['evaluation_config'] = config.get('evaluation_config', {})
+        arg_dict['distribution_config'] = config.get('distribution_config', {})
         deal_analyzer = DealAnalyzer(arg_dict)
         deal_analyzer.run()
         

@@ -108,6 +108,9 @@ class KeepaAPI:
                             results.append(data)
                 except Exception as e:
                     logger.error(f"Failed to query Keepa for batch: {e}")
+                    if 'PAYMENT_REQUIRED' in str(e):
+                        logger.critical("Keepa API Key is invalid or out of tokens/credits. Exiting.")
+                        sys.exit(1)
         
         return results
 
