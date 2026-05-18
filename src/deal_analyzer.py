@@ -404,6 +404,134 @@ class DealAnalyzer:
                     df_msrp_summary.to_excel(writer, sheet_name='Dist_ByMSRP', index=False)
         
         self.manifest.data["output_files"] = [str(report_path)]
+        
+        if rankings_data or distribution_data:
+            html_report_path = self.output_dir / report_name.replace('.xlsx', '_dashboard.html')
+            self._generate_html_report(
+                html_report_path, 
+                df_rankings if rankings_data else pd.DataFrame(), 
+                df_dist if distribution_data else pd.DataFrame()
+            )
+            self.manifest.data["output_files"].append(str(html_report_path))
+            
         self.manifest.data["status"] = "completed"
         self.manifest.save()
         logger.info(f"Report generated: {report_path}")
+
+    def _generate_html_report(self, output_path: Path, df_rankings: pd.DataFrame, df_dist: pd.DataFrame):
+        import plotly.express as px
+        
+        logger.info("Generating HTML interactive dashboard...")
+        html_content = ["<html><head><title>Deal Analyzer Dashboard</title>",
+                        "<style>body{font-family:sans-serif; margin:20px; background-color:#f9fafb; color:#111827;} .chart-container{margin-bottom: 40px; background:white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);}</style>",
+                        "</head><body><h1>Deal Analyzer Dashboard</h1>"]
+        
+        # 1. Rankings Bar Chart
+        if not df_rankings.empty:
+            df_rankings['Label'] = df_rankings['File'] + " - " + df_rankings['Tab']
+            fig1 = px.bar(
+                df_rankings, 
+                x='Label', 
+                y='Estimated Pallet Profit', 
+                color='Pallet ROI (%)',
+                title='Estimated Profit by Pallet',
+                hover_data=['Total Pallet Cost', 'Estimated Pallet Value', 'Realized Quantity'],
+                color_continuous_scale='Viridis'
+            )
+            html_content.append("<div class='chart-container'>")
+            html_content.append(fig1.to_html(full_html=False, include_plotlyjs='cdn'))
+            html_content.append("</div>")
+
+            # 1.5 Enrichment Rate Bar Chart
+            if 'Unenriched Rate' in df_rankings.columns:
+                df_rankings['Enrichment Rate (%)'] = (1 - df_rankings['Unenriched Rate']) * 100
+                fig_enrich = px.bar(
+                    df_rankings,
+                    x='Label',
+                    y='Enrichment Rate (%)',
+                    title='Enrichment Rate per Detail',
+                    text_auto='.1f'
+                )
+                fig_enrich.update_layout(yaxis=dict(range=[0, 100]))
+                html_content.append("<div class='chart-container'>")
+                html_content.append(fig_enrich.to_html(full_html=False, include_plotlyjs=False))
+                html_content.append("</div>")
+
+        if not df_dist.empty:
+            # 2. Profit by Category Tree
+            html_content.append("<div class='chart-container'>")
+            html_content.append("<h2>Estimated Profit by Category</h2>")
+            html_content.append("<label for='detailSelect'>Filter by Detail: </label>")
+            html_content.append("<select id='detailSelect' onchange='showChart(this.value)' style='margin-bottom: 20px; padding: 5px; font-size: 16px;'>")
+            
+            tabs = ['All'] + sorted(df_dist['Tab'].unique().tolist())
+            for t in tabs:
+                html_content.append(f"<option value='{t}'>{t}</option>")
+            html_content.append("</select>")
+            
+            for t in tabs:
+                df_subset = df_dist if t == 'All' else df_dist[df_dist['Tab'] == t]
+                df_cat = df_subset.groupby('Category', as_index=False).agg({'Estimated_Profit': 'sum', 'Cost': 'sum', 'Quantity': 'sum'})
+                df_cat = df_cat[df_cat['Estimated_Profit'] > 0].copy()
+                
+                display_style = "block" if t == 'All' else "none"
+                html_content.append(f"<div id='pie-{t}' class='pie-chart-div' style='display: {display_style};'>")
+                
+                total_profit = df_cat['Estimated_Profit'].sum()
+                if total_profit > 0 and not df_cat.empty:
+                    df_cat['Percentage'] = (df_cat['Estimated_Profit'] / total_profit) * 100
+                    
+                    mask = df_cat['Percentage'] >= 1.0
+                    df_main = df_cat[mask].copy()
+                    df_other = df_cat[~mask]
+                    
+                    if not df_other.empty:
+                        other_row = pd.DataFrame([{
+                            'Category': 'Other',
+                            'Estimated_Profit': df_other['Estimated_Profit'].sum(),
+                            'Cost': df_other['Cost'].sum(),
+                            'Quantity': df_other['Quantity'].sum(),
+                            'Percentage': df_other['Percentage'].sum()
+                        }])
+                        df_main = pd.concat([df_main, other_row], ignore_index=True)
+                        
+                    df_main = df_main.sort_values('Percentage', ascending=True)
+                    df_main['Annotation'] = df_main.apply(
+                        lambda r: f"{r['Percentage']:.1f}% | Qty: {int(r['Quantity'])} | Profit: ${r['Estimated_Profit']:,.0f} | Cost: ${r['Cost']:,.0f}", axis=1
+                    )
+                    
+                    fig2 = px.bar(
+                        df_main, 
+                        y='Category', 
+                        x='Percentage',
+                        text='Annotation',
+                        orientation='h'
+                    )
+                    fig2.update_traces(textposition='auto')
+                    fig2.update_layout(
+                        xaxis_title='Percentage of Total Profit (%)',
+                        yaxis_title='Category',
+                        height=max(400, len(df_main) * 40)
+                    )
+                    html_content.append(fig2.to_html(full_html=False, include_plotlyjs=False))
+                else:
+                    html_content.append("<p>No positive profit data for this detail.</p>")
+                html_content.append("</div>")
+                
+            html_content.append("<script>function showChart(tabId){var charts=document.getElementsByClassName('pie-chart-div');for(var i=0;i<charts.length;i++){charts[i].style.display='none';}var el=document.getElementById('pie-'+tabId);if(el){el.style.display='block'; window.dispatchEvent(new Event('resize'));}}</script>")
+            html_content.append("</div>")
+                
+            # 3. MSRP Bins vs Profit
+            if 'MSRP_Bin' in df_dist.columns:
+                df_msrp = df_dist.groupby('MSRP_Bin', observed=True).agg({'Estimated_Profit': 'sum'}).reset_index()
+                fig3 = px.bar(df_msrp, x='MSRP_Bin', y='Estimated_Profit', title='Estimated Profit by MSRP Range')
+                html_content.append("<div class='chart-container'>")
+                html_content.append(fig3.to_html(full_html=False, include_plotlyjs=False))
+                html_content.append("</div>")
+
+        html_content.append("</body></html>")
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("\n".join(html_content))
+            
+        logger.info(f"Dashboard generated: {output_path}")
