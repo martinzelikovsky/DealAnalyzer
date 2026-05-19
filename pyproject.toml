@@ -13,3 +13,8 @@ dependencies = [
     "streamlit>=1.57.0",
     "xlsxwriter>=3.2.9",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
