@@ -296,6 +296,11 @@ class DealAnalyzer:
                     unenriched_rate = (~df_grouped['Enriched']).mean() if not df_grouped.empty else 0.0
                     
                     calc_qty = df_grouped[qty_col] if qty_col else 1
+                    
+                    total_item_cost = (df_grouped['Unit_Cost'] * calc_qty).sum()
+                    enriched_cost = (df_grouped.loc[df_grouped['Enriched'], 'Unit_Cost'] * df_grouped.loc[df_grouped['Enriched'], qty_col] if qty_col else df_grouped.loc[df_grouped['Enriched'], 'Unit_Cost']).sum() if not df_grouped.empty else 0.0
+                    api_hit_rate_cost = (enriched_cost / total_item_cost) if total_item_cost > 0 else 0.0
+                    
                     est_pallet_value = (df_grouped['Net_Value'] * calc_qty).sum()
                     est_pallet_profit = est_pallet_value - fob_cost
                     pallet_roi = (est_pallet_profit / fob_cost * 100) if fob_cost > 0 else 0.0
@@ -310,7 +315,8 @@ class DealAnalyzer:
                         'Estimated Pallet Value': est_pallet_value,
                         'Realized Quantity': realized_qty,
                         'Expected Quantity': expected_qty,
-                        'Unenriched Rate': unenriched_rate
+                        'Unenriched Rate': unenriched_rate,
+                        'API Hit Rate by Cost': api_hit_rate_cost
                     })
                     
                     # Append to Summary Results
@@ -327,7 +333,8 @@ class DealAnalyzer:
                     })
                     
                     # Append to Distribution Analysis
-                    cat_col = next((c for c in df_grouped.columns if 'categoryTree' in c or 'Category' in c), None)
+                    cat_tree_cols = [c for c in df_grouped.columns if 'categoryTree' in c]
+                    cat_col = cat_tree_cols[0] if cat_tree_cols else next((c for c in df_grouped.columns if 'Category' in c), None)
                     for _, row in df_grouped.iterrows():
                         qty = row[qty_col] if qty_col else 1
                         cat_tree = str(row[cat_col]) if cat_col and pd.notna(row[cat_col]) else 'Unknown'
@@ -343,6 +350,8 @@ class DealAnalyzer:
                             'Category': main_category,
                             'Subcategory': sub_category,
                             'Original_MSRP': row.get('Original_MSRP', 0.0),
+                            'Estimated_Value': row.get('Estimated_Value', 0.0),
+                            'Net_Value': row.get('Net_Value', 0.0),
                             'Cost': row['Unit_Cost'] * qty,
                             'Estimated_Profit': row['Unit_Profit'] * qty,
                             'Quantity': qty
@@ -402,6 +411,8 @@ class DealAnalyzer:
                         'Quantity': 'sum'
                     }).reset_index()
                     df_msrp_summary.to_excel(writer, sheet_name='Dist_ByMSRP', index=False)
+                    
+                df_dist.to_excel(writer, sheet_name='Dist_RawData', index=False)
         
         self.manifest.data["output_files"] = [str(report_path)]
         
